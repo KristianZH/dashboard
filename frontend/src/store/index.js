@@ -258,43 +258,25 @@ const getters = {
 
 // actions
 const actions = {
-  fetchAll ({ dispatch, commit }, resources) {
-    const iteratee = (value, key) => dispatch(key, value)
-    return Promise
-      .all(map(resources, iteratee))
-      .catch(err => {
-        dispatch('setError', err)
-      })
-  },
   fetchCloudProfiles ({ dispatch }) {
     return dispatch('cloudProfiles/getAll')
-      .catch(err => {
-        dispatch('setError', err)
-      })
+    // .catch(err => dispatch('setError', err))
   },
   fetchDomains ({ dispatch }) {
     return dispatch('domains/getAll')
-      .catch(err => {
-        dispatch('setError', err)
-      })
+    // .catch(err => dispatch('setError', err))
   },
   fetchProjects ({ dispatch }) {
     return dispatch('projects/getAll')
-      .catch(err => {
-        dispatch('setError', err)
-      })
+    // .catch(err => dispatch('setError', err))
   },
   fetchMembers ({ dispatch, commit }) {
     return dispatch('members/getAll')
-      .catch(err => {
-        dispatch('setError', err)
-      })
+    // .catch(err => dispatch('setError', err))
   },
   fetchInfrastructureSecrets ({ dispatch, commit }) {
     return dispatch('infrastructureSecrets/getAll')
-      .catch(err => {
-        dispatch('setError', err)
-      })
+    // .catch(err => dispatch('setError', err))
   },
   clearShoots ({ dispatch, commit }) {
     return dispatch('shoots/clearAll')

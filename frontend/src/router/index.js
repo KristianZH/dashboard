@@ -22,8 +22,11 @@ import head from 'lodash/head'
 import get from 'lodash/get'
 import concat from 'lodash/concat'
 
+import { errorDetailsFromError } from '@/utils/error'
+
 /* Layouts */
 const Login = () => import('@/layouts/Login')
+const ErrorPage = () => import('@/layouts/Error')
 const Default = () => import('@/layouts/Default')
 
 /* Pages */
@@ -270,6 +273,21 @@ export default function createRouter ({ store, userManager }) {
           }
         }
       ]
+    },
+    {
+      path: '/error',
+      name: 'Error',
+      component: ErrorPage,
+      props: true
+    },
+    {
+      path: '*',
+      component: ErrorPage,
+      props: {
+        title: '404',
+        text: 'That page couldn\'t be found',
+        hint: `It looks like you're on uncharted territory.`
+      }
     }
   ]
   const zeroPoint = { x: 0, y: 0 }
@@ -277,17 +295,6 @@ export default function createRouter ({ store, userManager }) {
   const routerOptions = { mode, scrollBehavior, routes }
 
   /* navigation guards */
-  async function ensureConfigurationLoaded (to, from, next) {
-    try {
-      if (!store.state.cfg) {
-        await store.dispatch('fetchConfiguration')
-      }
-      next()
-    } catch (err) {
-      next(err)
-    }
-  }
-
   async function ensureUserAuthenticatedForNonPublicRoutes (to, from, next) {
     try {
       const { meta = {}, path } = to
@@ -336,6 +343,10 @@ export default function createRouter ({ store, userManager }) {
     return store.dispatch('fetchDomains')
   }
 
+  function unsubscribeComments () {
+    return store.dispatch('unsubscribeComments')
+  }
+
   function ensureDataLoaded (to, from, next) {
     const meta = to.meta || {}
     if (meta.public) {
@@ -349,14 +360,22 @@ export default function createRouter ({ store, userManager }) {
         ensureCloudProfilesLoaded(),
         ensureProjectsLoaded(),
         ensureDomainsLoaded(),
-        store.dispatch('unsubscribeComments')
+        unsubscribeComments()
       ])
       .then(() => {
         const params = to.params || {}
         const query = to.query || {}
         const namespaces = store.getters.namespaces
         const namespace = params.namespace || query.namespace
-        if (namespace !== store.state.namespace && (includes(namespaces, namespace) || namespace === '_all')) {
+        if (!namespace) {
+          return
+        }
+        if (!includes([ '_all', ...namespaces ], namespace)) {
+          const err = new Error(`Namespace ${namespace} not found`)
+          err.code = 404
+          throw err
+        }
+        if (namespace !== store.state.namespace) {
           return store.dispatch('setNamespace', namespace)
         }
       })
@@ -437,21 +456,31 @@ export default function createRouter ({ store, userManager }) {
   const router = new Router(routerOptions)
 
   /* register navigation guards */
-  router.beforeEach((to, from, next) => {
-    store.dispatch('setLoading').then(() => next(), () => next())
+  router.beforeEach(async (to, from, next) => {
+    try {
+      await store.dispatch('setLoading')
+    } catch (err) { /* ignore error */ }
+    next()
   })
-  router.beforeEach(ensureConfigurationLoaded)
   router.beforeEach(ensureUserAuthenticatedForNonPublicRoutes)
   router.beforeEach(ensureDataLoaded)
-  router.afterEach((to, from) => {
-    store.dispatch('unsetLoading')
+  router.afterEach(async (to, from) => {
+    try {
+      await store.dispatch('unsetLoading')
+    } catch (err) { /* ignore error */ }
   })
-  router.onError(err => {
-    console.error('Router error:', err.message)
-    Promise.all([
-      store.dispatch('unsetLoading'),
-      store.dispatch('setError', err)
-    ])
+  router.onError(async err => {
+    console.error(err)
+    await store.dispatch('unsetLoading')
+    const { errorCode: statusCode, detailedMessage } = errorDetailsFromError(err)
+    router.push({
+      name: 'Error',
+      params: {
+        title: '' + statusCode,
+        text: 'Navigation Error',
+        hint: detailedMessage
+      }
+    })
   })
   return router
 }
